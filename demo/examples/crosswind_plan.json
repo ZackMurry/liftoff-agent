@@ -1,0 +1,15 @@
+{
+  "flight_plan": {
+    "home": [38.898, -77.036],
+    "altitude_m": 25,
+    "speed_m_s": 8,
+    "waypoints": [
+      [38.899, -77.035],
+      [38.900, -77.034],
+      [38.8995, -77.033]
+    ],
+    "acceptance_radius_m": 3
+  },
+  "wind_speed": 5,
+  "wind_direction": 90
+}

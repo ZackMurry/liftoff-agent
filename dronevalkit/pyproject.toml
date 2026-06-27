@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dronevalkit"
+version = "0.1.0"
+description = "Validate drone-assisted delivery routes from OR solvers in PX4 SITL simulation."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    {name = "Zack Murry", email = "zackk.murryy@gmail.com"},
+]
+keywords = ["drone", "vehicle-routing", "PX4", "simulation", "validation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "mavsdk>=2.0",
+    "pyulog>=1.0",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+    "docker>=7.0",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+veroviz = ["veroviz>=0.4.6"]
+dev = ["pytest>=7.0", "ruff>=0.1"]
+
+[project.scripts]
+dronevalkit-monitor = "dronevalkit.monitor:main"
+
+[tool.setuptools.packages.find]
+include = ["dronevalkit*"]
+
+[project.urls]
+Homepage = "https://github.com/ZackMurry/dronevalkit"
+Documentation = "https://github.com/ZackMurry/dronevalkit"
+Issues = "https://github.com/ZackMurry/dronevalkit/issues"

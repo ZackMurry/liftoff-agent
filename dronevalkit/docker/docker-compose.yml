@@ -1,0 +1,19 @@
+services:
+  px4-sim:
+    image: zackmurry/dronevalkit-sim:latest
+    # host networking exposes MAVLink ports directly on localhost
+    # (MAVSDK connects to udp://:14540)
+    network_mode: host
+    environment:
+      - HEADLESS=1
+      - PX4_SIM_SPEED_FACTOR=1
+      # Set depot coordinates before starting (override these for your problem)
+      - PX4_HOME_LAT=38.898
+      - PX4_HOME_LON=-77.036
+      - PX4_HOME_ALT=0
+      # Instance 0 → port 14540; change for parallel runs
+      - PX4_INSTANCE=0
+    volumes:
+      # ULog files are written here inside the container and exposed to the host
+      - ./logs:/root/PX4-Autopilot/build/px4_sitl_default/rootfs/log
+    command: bash -c "HEADLESS=1 make px4_sitl gz_x500"

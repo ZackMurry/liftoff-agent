@@ -1,0 +1,32 @@
+Metadata-Version: 2.4
+Name: dronevalkit
+Version: 0.1.0
+Summary: Validate drone-assisted delivery routes from OR solvers in PX4 SITL simulation.
+Author-email: Zack Murry <zackk.murryy@gmail.com>
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/youruser/dronevalkit
+Project-URL: Documentation, https://github.com/youruser/dronevalkit/wiki
+Project-URL: Issues, https://github.com/youruser/dronevalkit/issues
+Keywords: drone,vehicle-routing,FSTSP,TSP-D,PX4,simulation,validation
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: mavsdk>=2.0
+Requires-Dist: pyulog>=1.0
+Requires-Dist: numpy>=1.24
+Requires-Dist: pandas>=2.0
+Requires-Dist: matplotlib>=3.7
+Requires-Dist: docker>=7.0
+Provides-Extra: veroviz
+Requires-Dist: veroviz>=0.4.6; extra == "veroviz"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: ruff>=0.1; extra == "dev"
+Dynamic: license-file
+
+# dronevalkit
+Validate drone-assisted delivery routes from OR solvers in PX4 SITL simulation

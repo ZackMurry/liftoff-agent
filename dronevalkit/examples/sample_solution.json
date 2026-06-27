@@ -1,0 +1,28 @@
+{
+  "problem": {
+    "depot": [38.898, -77.036],
+    "customers": {
+      "1": [38.906, -77.043],
+      "2": [38.912, -77.030],
+      "3": [38.904, -77.022],
+      "4": [38.895, -77.048],
+      "5": [38.910, -77.052]
+    },
+    "drone_eligible": [1, 2, 4, 5]
+  },
+  "truck_route": [0, 3, 5, 2, 0],
+  "num_drones": 2,
+  "sorties": [
+    {"launch": 0, "delivery": 1, "rendezvous": 3, "drone_id": 0},
+    {"launch": 3, "delivery": 4, "rendezvous": 5, "drone_id": 0},
+    {"launch": 5, "delivery": 2, "rendezvous": 0, "drone_id": 1}
+  ],
+  "planned_metrics": {
+    "drone_speed": 10.0,
+    "makespan": 1680,
+    "sortie_times": [180, 210, 195],
+    "sortie_energies": [12.5, 14.8, 13.2]
+  },
+  "truck_speed": 8.33,
+  "truck_arrival_times": null
+}
