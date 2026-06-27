@@ -1,6 +1,11 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { postReviewComment, getInstallationOctokit } from "./github";
+import {
+  insertExperiment,
+  completeExperiment,
+  updatePullRequestStatus,
+} from "./db";
 
 const SIM_SERVER_URL = process.env.SIM_SERVER_URL ?? "http://localhost:8000";
 
@@ -18,12 +23,14 @@ export function makeTools({
   repo,
   pullNumber,
   source,
+  prDbId,
 }: {
   octokit: Awaited<ReturnType<typeof getInstallationOctokit>>;
   owner: string;
   repo: string;
   pullNumber: number;
   source: ExperimentSource;
+  prDbId: string;
 }) {
   return {
     run_experiment: tool({
@@ -50,6 +57,12 @@ export function makeTools({
           .describe("Simulation speed multiplier"),
       }),
       execute: async ({ scenario, params, replications, speed_factor }) => {
+        const expId = await insertExperiment({
+          pullRequestId: prDbId,
+          scenario,
+          params: { ...params, replications, speed_factor },
+        });
+
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (process.env.SIM_SERVER_AUTH_TOKEN) {
           headers.Authorization = `Bearer ${process.env.SIM_SERVER_AUTH_TOKEN}`;
@@ -67,9 +80,13 @@ export function makeTools({
         });
         if (!res.ok) {
           const text = await res.text();
-          return { error: `Sim server returned ${res.status}: ${text}` };
+          const errorResult = { status: "error", error: `Sim server returned ${res.status}: ${text}` };
+          await completeExperiment(expId, errorResult);
+          return errorResult;
         }
-        return await res.json();
+        const result = await res.json();
+        await completeExperiment(expId, result);
+        return result;
       },
     }),
 
@@ -85,6 +102,15 @@ export function makeTools({
       }),
       execute: async ({ body }) => {
         await postReviewComment(octokit, owner, repo, pullNumber, body);
+
+        const recommendation = body.toLowerCase().includes("request changes")
+          ? "request"
+          : body.toLowerCase().includes("approve")
+            ? "approve"
+            : "forming";
+        const status = recommendation === "approve" ? "passed" : "failed";
+        await updatePullRequestStatus(prDbId, status, recommendation, body);
+
         return { success: true };
       },
     }),

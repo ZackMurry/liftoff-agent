@@ -29,6 +29,7 @@ export async function runAgent({
   repo,
   pullNumber,
   source,
+  prDbId,
 }: {
   diff: string;
   prTitle: string;
@@ -38,13 +39,14 @@ export async function runAgent({
   repo: string;
   pullNumber: number;
   source: ExperimentSource;
+  prDbId: string;
 }) {
   const truncatedDiff =
     diff.length > MAX_DIFF_CHARS
       ? diff.slice(0, MAX_DIFF_CHARS) + "\n\n... [diff truncated] ..."
       : diff;
 
-  const tools = makeTools({ octokit, owner, repo, pullNumber, source });
+  const tools = makeTools({ octokit, owner, repo, pullNumber, source, prDbId });
 
   const result = await generateText({
     model: openai("gpt-4o"),

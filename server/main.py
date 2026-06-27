@@ -117,6 +117,7 @@ def _authorize_run_request(
     x_liftoff_token: str | None,
 ) -> None:
     expected = os.environ.get("SIM_SERVER_AUTH_TOKEN")
+    print('expected auth token', expected)
     if not expected:
         return
     bearer = None
