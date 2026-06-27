@@ -59,6 +59,28 @@ def test_run_endpoint_normalizes_scenario_alias(monkeypatch):
     assert result.scenario == "crosswind"
 
 
+def test_run_endpoint_normalizes_legacy_agent_scenarios(monkeypatch):
+    seen = []
+
+    def fake_run(req):
+        seen.append(req.scenario)
+        return ExperimentResult(
+            scenario=req.scenario,
+            params=req.params,
+            status="passed",
+            runs=[],
+            pass_criteria={},
+            verdict="ok",
+        )
+
+    monkeypatch.setattr("server.main.run_user_experiment", fake_run)
+
+    run_experiment(ExperimentRequest(scenario="crosswind_mission", params={}, source=_request().source))
+    run_experiment(ExperimentRequest(scenario="emergency_stop", params={}, source=_request().source))
+
+    assert seen == ["crosswind", "low_battery_rtl"]
+
+
 def test_run_user_experiment_clones_launches_sim_and_runs_user_command(
     monkeypatch,
 ):

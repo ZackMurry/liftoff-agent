@@ -64,6 +64,7 @@ SCENARIOS: dict[str, dict[str, Any]] = {
 
 
 SCENARIO_ALIASES: dict[str, str] = {
+    "crosswind_mission": "crosswind",
     "crosswind_stability": "crosswind",
     "wind": "crosswind",
     "windy": "crosswind",
@@ -78,6 +79,9 @@ SCENARIO_ALIASES: dict[str, str] = {
     "turns": "tight_turns",
     "low_battery": "low_battery_rtl",
     "battery_rtl": "low_battery_rtl",
+    "emergency_stop": "low_battery_rtl",
+    "failsafe": "low_battery_rtl",
+    "failsafe_rtl": "low_battery_rtl",
     "return_to_launch": "low_battery_rtl",
     "rtl": "low_battery_rtl",
 }

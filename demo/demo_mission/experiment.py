@@ -15,6 +15,7 @@ from .result import build_result
 def main() -> int:
     scenario = os.environ.get("LIFTOFF_SCENARIO", "waypoint_mission")
     params = _load_params()
+    params.setdefault("scenario", scenario)
     output_dir = Path(os.environ.get("LIFTOFF_OUTPUT_DIR", "."))
     output_dir.mkdir(parents=True, exist_ok=True)
 

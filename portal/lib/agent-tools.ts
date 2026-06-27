@@ -8,6 +8,12 @@ import {
 } from "./db";
 
 const SIM_SERVER_URL = process.env.SIM_SERVER_URL ?? "http://localhost:8000";
+const VALID_SCENARIOS = [
+  "waypoint_mission",
+  "crosswind",
+  "tight_turns",
+  "low_battery_rtl",
+] as const;
 
 export type ExperimentSource = {
   clone_url: string;
@@ -35,9 +41,11 @@ export function makeTools({
   return {
     run_experiment: tool({
       description:
-        "Run a drone simulation experiment on the sim server. Returns the full ExperimentResult JSON with metrics and outcomes.",
+        "Run a drone simulation experiment on the sim server. The scenario must be exactly one of: waypoint_mission, crosswind, tight_turns, low_battery_rtl. Returns the full ExperimentResult JSON with metrics and outcomes.",
       inputSchema: z.object({
-        scenario: z.string().describe("Scenario name, e.g. 'windy_landing'"),
+        scenario: z
+          .enum(VALID_SCENARIOS)
+          .describe("Scenario name. Must be exactly one of the enum values."),
         params: z
           .record(z.string(), z.unknown())
           .optional()

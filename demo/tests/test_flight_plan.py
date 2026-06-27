@@ -37,3 +37,11 @@ def test_parse_flat_liftoff_params():
     assert plan.altitude_m == 30
     assert plan.speed_m_s == 7
     assert len(plan.waypoints) == 1
+
+
+def test_parse_emergency_stop_alias_uses_safe_defaults():
+    plan = parse_flight_plan({"scenario": "emergency_stop", "speed_m_s": 9})
+
+    assert plan.speed_m_s == 9
+    assert plan.acceptance_radius_m == 4
+    assert len(plan.waypoints) >= 1

@@ -11,6 +11,23 @@ DEFAULT_WAYPOINTS = (
     (38.900, -77.034),
 )
 
+SCENARIO_DEFAULTS: dict[str, dict[str, Any]] = {
+    "waypoint_mission": {},
+    "crosswind": {"acceptance_radius_m": 3.0},
+    "crosswind_mission": {"acceptance_radius_m": 3.0},
+    "crosswind_stability": {"acceptance_radius_m": 3.0},
+    "tight_turns": {
+        "waypoints": (
+            (38.8984, -77.0355),
+            (38.8988, -77.0365),
+            (38.8992, -77.0355),
+        ),
+        "acceptance_radius_m": 4.0,
+    },
+    "low_battery_rtl": {"acceptance_radius_m": 4.0},
+    "emergency_stop": {"acceptance_radius_m": 4.0},
+}
+
 
 @dataclass(frozen=True)
 class Waypoint:
@@ -49,6 +66,8 @@ class FlightPlan:
 
 def parse_flight_plan(params: dict[str, Any]) -> FlightPlan:
     """Parse explicit or scenario-style Liftoff params into a flight plan."""
+    scenario = str(params.get("scenario", "")).strip().lower()
+    scenario_defaults = SCENARIO_DEFAULTS.get(scenario, {})
     raw_plan = params.get("flight_plan")
     if raw_plan is not None:
         if not isinstance(raw_plan, dict):
@@ -57,8 +76,8 @@ def parse_flight_plan(params: dict[str, Any]) -> FlightPlan:
     else:
         source = params
 
-    home = _waypoint(source.get("home", source.get("depot", DEFAULT_HOME)), "home")
-    raw_waypoints = source.get("waypoints", DEFAULT_WAYPOINTS)
+    home = _waypoint(source.get("home", source.get("depot", scenario_defaults.get("home", DEFAULT_HOME))), "home")
+    raw_waypoints = source.get("waypoints", scenario_defaults.get("waypoints", DEFAULT_WAYPOINTS))
     if not isinstance(raw_waypoints, (list, tuple)):
         raise ValueError("waypoints must be a list")
     waypoints = tuple(_waypoint(value, f"waypoint[{idx}]") for idx, value in enumerate(raw_waypoints))
@@ -66,9 +85,9 @@ def parse_flight_plan(params: dict[str, Any]) -> FlightPlan:
     return FlightPlan(
         home=home,
         waypoints=waypoints,
-        altitude_m=float(source.get("altitude_m", source.get("altitude", 5.0))),
-        speed_m_s=float(source.get("speed_m_s", source.get("drone_speed", 8.0))),
-        acceptance_radius_m=float(source.get("acceptance_radius_m", 3.0)),
+        altitude_m=float(source.get("altitude_m", source.get("altitude", scenario_defaults.get("altitude_m", 5.0)))),
+        speed_m_s=float(source.get("speed_m_s", source.get("drone_speed", scenario_defaults.get("speed_m_s", 8.0)))),
+        acceptance_radius_m=float(source.get("acceptance_radius_m", scenario_defaults.get("acceptance_radius_m", 3.0))),
     )
 
 
