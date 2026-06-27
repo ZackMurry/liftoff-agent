@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .models import ExperimentRequest, ExperimentResult, HealthResponse, ScenarioInfo
 from .repo_runner import UserExperimentError, run_user_experiment
-from .scenarios import SCENARIOS
+from .scenarios import SCENARIOS, normalize_scenario
 from .sim_launcher import DEFAULT_DOCKER_IMAGE, SimLaunchError
 
 logger = logging.getLogger("liftoff")
@@ -70,11 +70,13 @@ def run_experiment(
     """Clone PR code, launch PX4/Gazebo, run user code, and return metrics."""
     _authorize_run_request(authorization, x_liftoff_token)
 
-    if req.scenario not in SCENARIOS:
+    scenario = normalize_scenario(req.scenario)
+    if scenario not in SCENARIOS:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown scenario '{req.scenario}'. Available: {list(SCENARIOS.keys())}",
         )
+    req.scenario = scenario
 
     try:
         return run_user_experiment(req)
@@ -117,13 +119,11 @@ def _authorize_run_request(
     x_liftoff_token: str | None,
 ) -> None:
     expected = os.environ.get("SIM_SERVER_AUTH_TOKEN")
-    print('expected auth token', expected)
     if not expected:
         return
     bearer = None
     if authorization and authorization.lower().startswith("bearer "):
         bearer = authorization[7:].strip()
     supplied = x_liftoff_token or bearer
-    print('supplied', supplied)
     if supplied != expected:
         raise HTTPException(status_code=401, detail="Unauthorized")

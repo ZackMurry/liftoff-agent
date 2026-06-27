@@ -61,3 +61,28 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         },
     },
 }
+
+
+SCENARIO_ALIASES: dict[str, str] = {
+    "crosswind_stability": "crosswind",
+    "wind": "crosswind",
+    "windy": "crosswind",
+    "windy_landing": "crosswind",
+    "gps": "waypoint_mission",
+    "gps_degradation": "waypoint_mission",
+    "gps_degraded": "waypoint_mission",
+    "precision_navigation": "waypoint_mission",
+    "waypoint_accuracy": "waypoint_mission",
+    "dense_waypoints": "tight_turns",
+    "tight_turn": "tight_turns",
+    "turns": "tight_turns",
+    "low_battery": "low_battery_rtl",
+    "battery_rtl": "low_battery_rtl",
+    "return_to_launch": "low_battery_rtl",
+    "rtl": "low_battery_rtl",
+}
+
+
+def normalize_scenario(name: str) -> str:
+    canonical = name.strip().lower().replace("-", "_").replace(" ", "_")
+    return SCENARIO_ALIASES.get(canonical, canonical)

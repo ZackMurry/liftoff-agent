@@ -5,7 +5,8 @@ import types
 from pathlib import Path
 from unittest.mock import Mock
 
-from server.models import ExperimentRequest, SourceRepo
+from server.models import ExperimentRequest, ExperimentResult, SourceRepo
+from server.main import run_experiment
 from server.repo_runner import UserExperimentError, _resolve_test_command, run_user_experiment
 from server.sim_launcher import PX4SimLauncher, SimLaunchConfig
 
@@ -29,6 +30,33 @@ def _request() -> ExperimentRequest:
             token="secret-token",
         ),
     )
+
+
+def test_run_endpoint_normalizes_scenario_alias(monkeypatch):
+    seen = {}
+
+    def fake_run(req):
+        seen["scenario"] = req.scenario
+        return ExperimentResult(
+            scenario=req.scenario,
+            params=req.params,
+            status="passed",
+            runs=[],
+            pass_criteria={},
+            verdict="ok",
+        )
+
+    monkeypatch.setattr("server.main.run_user_experiment", fake_run)
+    result = run_experiment(
+        ExperimentRequest(
+            scenario="crosswind_stability",
+            params={},
+            source=_request().source,
+        )
+    )
+
+    assert seen["scenario"] == "crosswind"
+    assert result.scenario == "crosswind"
 
 
 def test_run_user_experiment_clones_launches_sim_and_runs_user_command(

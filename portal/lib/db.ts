@@ -115,7 +115,7 @@ export async function completeExperiment(
 export async function getDashboardPRs() {
   const { data, error } = await supabase
     .from("pull_requests")
-    .select("*, experiments(id, scenario, status, verdict)")
+    .select("*, experiments(id, scenario, status, verdict, started_at, finished_at)")
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;

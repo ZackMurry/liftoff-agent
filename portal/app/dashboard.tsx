@@ -9,12 +9,15 @@ type DotState = "pass" | "fail" | "run" | "queue";
 
 export type PullRequestRow = {
   id: string;
+  number: string;
   title: string;
   branch: string;
   author: string;
   status: PullStatus;
   rec: Recommendation;
   dots: DotState[];
+  latestExperimentStatus?: string;
+  headSha?: string;
   time?: string;
 };
 
@@ -46,7 +49,7 @@ export default function Dashboard({
     const q = query.trim().toLowerCase();
     return prs.filter((pr) => {
       const filterMatch = filter === "all" || filter === pr.status;
-      const search = `#${pr.id} ${pr.title} ${pr.author} ${pr.branch}`.toLowerCase();
+      const search = `#${pr.number} ${pr.title} ${pr.author} ${pr.branch} ${pr.headSha ?? ""}`.toLowerCase();
       return filterMatch && (!q || search.includes(q));
     });
   }, [filter, query, prs]);
@@ -198,7 +201,7 @@ function PullRequestItem({ pr }: { pr: PullRequestRow }) {
   const isActive = pr.status === "active";
 
   return (
-    <a className="pr-row" href={`/pulls/${pr.id}`} aria-label={`${pr.title} pull request ${pr.id}`}>
+    <a className="pr-row" href={`/pulls/${pr.id}`} aria-label={`${pr.title} pull request ${pr.number}`}>
       <span
         className="status-dot"
         style={{
@@ -210,10 +213,10 @@ function PullRequestItem({ pr }: { pr: PullRequestRow }) {
       <div className="pr-title-block">
         <div className="title-line">
           <span>{pr.title}</span>
-          <em>#{pr.id}</em>
+          <em>#{pr.number}</em>
         </div>
         <div className="meta-line">
-          {pr.branch} - @{pr.author} - {pr.time ?? ""}
+          {pr.branch} - @{pr.author} {pr.headSha ? `- ${pr.headSha}` : ""} - {pr.time ?? ""}
         </div>
       </div>
 
@@ -239,7 +242,7 @@ function PullRequestItem({ pr }: { pr: PullRequestRow }) {
       </span>
 
       <div className="right-metric">
-        <div>{pr.time}</div>
+        <div>{pr.latestExperimentStatus ?? pr.time}</div>
         {isActive ? (
           <div className="mini-progress">
             <span style={{ width: "50%" }} />
