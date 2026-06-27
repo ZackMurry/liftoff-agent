@@ -22,7 +22,7 @@ class Waypoint:
 class FlightPlan:
     home: Waypoint
     waypoints: tuple[Waypoint, ...]
-    altitude_m: float = 20.0
+    altitude_m: float = 5.0
     speed_m_s: float = 8.0
     acceptance_radius_m: float = 3.0
 
@@ -44,7 +44,7 @@ class FlightPlan:
     @property
     def planned_time_s(self) -> float:
         climb_land_time_s = (self.altitude_m / 3.0) * 2.0
-        return self.planned_distance_m / self.speed_m_s + climb_land_time_s
+        return min(20.0, self.planned_distance_m / self.speed_m_s + climb_land_time_s)
 
 
 def parse_flight_plan(params: dict[str, Any]) -> FlightPlan:
@@ -66,7 +66,7 @@ def parse_flight_plan(params: dict[str, Any]) -> FlightPlan:
     return FlightPlan(
         home=home,
         waypoints=waypoints,
-        altitude_m=float(source.get("altitude_m", source.get("altitude", 20.0))),
+        altitude_m=float(source.get("altitude_m", source.get("altitude", 5.0))),
         speed_m_s=float(source.get("speed_m_s", source.get("drone_speed", 8.0))),
         acceptance_radius_m=float(source.get("acceptance_radius_m", 3.0)),
     )

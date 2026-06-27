@@ -111,6 +111,15 @@ def test_resolve_test_command_supports_monorepo_demo_entrypoint(tmp_path, monkey
     assert _resolve_test_command(tmp_path) == "./demo/liftoff/run_experiment"
 
 
+def test_resolve_test_command_falls_back_when_configured_command_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("LIFTOFF_TEST_COMMAND", "./demo/liftoff/run_experiment")
+    entrypoint = tmp_path / "liftoff" / "run_experiment"
+    entrypoint.parent.mkdir()
+    entrypoint.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+    assert _resolve_test_command(tmp_path) == "./liftoff/run_experiment"
+
+
 def test_resolve_test_command_reports_missing_entrypoint(tmp_path, monkeypatch):
     monkeypatch.delenv("LIFTOFF_TEST_COMMAND", raising=False)
 

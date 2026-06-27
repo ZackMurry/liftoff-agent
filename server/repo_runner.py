@@ -200,7 +200,10 @@ def _normalize_result(req: ExperimentRequest, payload: dict[str, Any]) -> Experi
 def _resolve_test_command(checkout_dir: Path) -> str:
     configured = os.environ.get("LIFTOFF_TEST_COMMAND")
     if configured:
-        return configured
+        configured_path = checkout_dir / configured.removeprefix("./")
+        if configured_path.is_file():
+            configured_path.chmod(configured_path.stat().st_mode | stat.S_IXUSR)
+            return configured
 
     for candidate in TEST_COMMAND_CANDIDATES:
         path = checkout_dir / candidate.removeprefix("./")
@@ -209,9 +212,14 @@ def _resolve_test_command(checkout_dir: Path) -> str:
             return candidate
 
     candidates = ", ".join(TEST_COMMAND_CANDIDATES)
+    configured_note = (
+        f" Configured LIFTOFF_TEST_COMMAND was {configured!r}, but it was not found in the cloned repo."
+        if configured else ""
+    )
     raise UserExperimentError(
         "No Liftoff experiment entrypoint found in cloned repo. "
-        f"Expected one of: {candidates}. "
+        f"Expected one of: {candidates}."
+        f"{configured_note} "
         "Set LIFTOFF_TEST_COMMAND only for non-standard repos."
     )
 

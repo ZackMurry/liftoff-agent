@@ -11,10 +11,15 @@ scenario details in environment variables.
 
 - Reads a flight plan from Liftoff scenario params.
 - Connects to PX4 through MAVSDK.
-- Arms, takes off, visits each waypoint, and lands.
+- Arms, takes off to a low altitude, hovers briefly, and lands.
 - Emits Liftoff-compatible JSON with pass/fail criteria and run metrics.
 - Supports `LIFTOFF_DRY_RUN=1` so the parser/result pipeline can be tested
   without Docker, PX4, Gazebo, or MAVSDK.
+
+The flight plan is still parsed and returned in the Liftoff result path so PRs
+can change mission shape/speed and the agent can select related scenarios. The
+demo intentionally keeps the real simulator action short for fast pipeline
+checks; it does not fly every waypoint.
 
 ## Flight Plan Input
 
@@ -25,7 +30,7 @@ Liftoff passes `LIFTOFF_PARAMS_JSON`. This demo accepts either an explicit
 {
   "flight_plan": {
     "home": [38.898, -77.036],
-    "altitude_m": 25,
+    "altitude_m": 5,
     "speed_m_s": 8,
     "waypoints": [
       [38.899, -77.035],
@@ -42,7 +47,7 @@ or the flatter scenario params Liftoff already uses:
 {
   "home": [38.898, -77.036],
   "waypoints": [[38.899, -77.035]],
-  "altitude": 20,
+  "altitude": 5,
   "drone_speed": 8
 }
 ```

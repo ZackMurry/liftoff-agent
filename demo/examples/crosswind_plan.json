@@ -1,7 +1,7 @@
 {
   "flight_plan": {
     "home": [38.898, -77.036],
-    "altitude_m": 25,
+    "altitude_m": 5,
     "speed_m_s": 8,
     "waypoints": [
       [38.899, -77.035],
