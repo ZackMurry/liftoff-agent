@@ -16,6 +16,10 @@ from .models import ExperimentRequest, ExperimentResult, RunMetrics, SourceRepo
 from .sim_launcher import PX4SimLauncher, SimLaunchError, build_launch_config
 
 DEFAULT_TEST_COMMAND = "./liftoff/run_experiment"
+TEST_COMMAND_CANDIDATES = (
+    "./liftoff/run_experiment",
+    "./demo/liftoff/run_experiment",
+)
 DEFAULT_COMMAND_TIMEOUT_S = 600
 DEFAULT_SIM_STARTUP_DELAY_S = 8
 
@@ -116,7 +120,7 @@ def _run_user_command(
     sim_log_dir: Path,
     mavsdk_addresses: list[str],
 ) -> dict[str, Any]:
-    command = os.environ.get("LIFTOFF_TEST_COMMAND", DEFAULT_TEST_COMMAND)
+    command = _resolve_test_command(checkout_dir)
     timeout = int(os.environ.get("LIFTOFF_TEST_TIMEOUT_S", DEFAULT_COMMAND_TIMEOUT_S))
     env = os.environ.copy()
     env.update(
@@ -190,6 +194,25 @@ def _normalize_result(req: ExperimentRequest, payload: dict[str, Any]) -> Experi
         pass_criteria={str(k): bool(v) for k, v in pass_criteria.items()},
         verdict=str(payload.get("verdict", "User experiment completed.")),
         error=payload.get("error"),
+    )
+
+
+def _resolve_test_command(checkout_dir: Path) -> str:
+    configured = os.environ.get("LIFTOFF_TEST_COMMAND")
+    if configured:
+        return configured
+
+    for candidate in TEST_COMMAND_CANDIDATES:
+        path = checkout_dir / candidate.removeprefix("./")
+        if path.is_file():
+            path.chmod(path.stat().st_mode | stat.S_IXUSR)
+            return candidate
+
+    candidates = ", ".join(TEST_COMMAND_CANDIDATES)
+    raise UserExperimentError(
+        "No Liftoff experiment entrypoint found in cloned repo. "
+        f"Expected one of: {candidates}. "
+        "Set LIFTOFF_TEST_COMMAND only for non-standard repos."
     )
 
 

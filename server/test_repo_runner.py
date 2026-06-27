@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 from server.models import ExperimentRequest, SourceRepo
-from server.repo_runner import run_user_experiment
+from server.repo_runner import UserExperimentError, _resolve_test_command, run_user_experiment
 from server.sim_launcher import PX4SimLauncher, SimLaunchConfig
 
 
@@ -39,7 +39,11 @@ def test_run_user_experiment_clones_launches_sim_and_runs_user_command(
     def fake_run(cmd, **kwargs):
         calls.append((cmd, kwargs))
         if cmd[:2] == ["git", "clone"]:
-            Path(cmd[-1]).mkdir()
+            checkout = Path(cmd[-1])
+            checkout.mkdir()
+            entrypoint = checkout / "demo" / "liftoff" / "run_experiment"
+            entrypoint.parent.mkdir(parents=True)
+            entrypoint.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
             return types.SimpleNamespace(returncode=0, stdout="", stderr="")
         if cmd[:2] == ["git", "checkout"]:
             return types.SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -81,11 +85,41 @@ def test_run_user_experiment_clones_launches_sim_and_runs_user_command(
     assert checkout_cmd == ["git", "checkout", "--detach", "abc123"]
 
     env = user_call[1]["env"]
+    assert user_call[0] == "./demo/liftoff/run_experiment"
     assert env["LIFTOFF_SCENARIO"] == "crosswind"
     assert env["LIFTOFF_REPLICATIONS"] == "2"
     assert env["LIFTOFF_SPEED_FACTOR"] == "3.0"
     assert json.loads(env["LIFTOFF_MAVSDK_ADDRESSES_JSON"]) == ["udpin://0.0.0.0:14540"]
     assert env["LIFTOFF_HEAD_SHA"] == "abc123"
+
+
+def test_resolve_test_command_prefers_standard_user_repo_entrypoint(tmp_path, monkeypatch):
+    monkeypatch.delenv("LIFTOFF_TEST_COMMAND", raising=False)
+    entrypoint = tmp_path / "liftoff" / "run_experiment"
+    entrypoint.parent.mkdir()
+    entrypoint.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+    assert _resolve_test_command(tmp_path) == "./liftoff/run_experiment"
+
+
+def test_resolve_test_command_supports_monorepo_demo_entrypoint(tmp_path, monkeypatch):
+    monkeypatch.delenv("LIFTOFF_TEST_COMMAND", raising=False)
+    entrypoint = tmp_path / "demo" / "liftoff" / "run_experiment"
+    entrypoint.parent.mkdir(parents=True)
+    entrypoint.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+    assert _resolve_test_command(tmp_path) == "./demo/liftoff/run_experiment"
+
+
+def test_resolve_test_command_reports_missing_entrypoint(tmp_path, monkeypatch):
+    monkeypatch.delenv("LIFTOFF_TEST_COMMAND", raising=False)
+
+    try:
+        _resolve_test_command(tmp_path)
+    except UserExperimentError as exc:
+        assert "./liftoff/run_experiment" in str(exc)
+    else:
+        raise AssertionError("expected UserExperimentError")
 
 
 def test_px4_launcher_preserves_dronevalkit_docker_infra(monkeypatch, tmp_path):
