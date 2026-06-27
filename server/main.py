@@ -124,5 +124,6 @@ def _authorize_run_request(
     if authorization and authorization.lower().startswith("bearer "):
         bearer = authorization[7:].strip()
     supplied = x_liftoff_token or bearer
+    print('supplied', supplied)
     if supplied != expected:
         raise HTTPException(status_code=401, detail="Unauthorized")
