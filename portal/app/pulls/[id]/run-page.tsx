@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Filter = "all" | "failed" | "running" | "queued";
 
@@ -29,20 +30,13 @@ type RunExperiment = {
   error: string | null;
   params: Record<string, unknown> | null;
   result: Record<string, unknown> | null;
+  logs: string[];
   passCriteria: Record<string, unknown> | null;
   startedAt: string | null;
   finishedAt: string | null;
 };
 
 const accent = "#00e5a0";
-const logPool = [
-  "spawn px4 sitl + gazebo",
-  "clone head branch",
-  "resolve liftoff entrypoint",
-  "connect mavsdk",
-  "collect experiment json",
-  "write result artifact",
-];
 
 function fmt(seconds: number) {
   return Math.floor(seconds / 60) + ":" + String(Math.floor(seconds) % 60).padStart(2, "0");
@@ -74,14 +68,10 @@ function visibleStatus(status: string): Filter {
 }
 
 export default function RunPage({ data }: { data: RunPageData }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<Filter>("all");
-  const [elapsed, setElapsed] = useState(0);
-  const [logs, setLogs] = useState<string[]>([
-    "[t+0.2s] received GitHub PR event",
-    "[t+1.1s] selected validation scenarios",
-    "[t+2.4s] waiting for experiment results",
-  ]);
+  const [now, setNow] = useState(() => Date.now());
 
   const experiments = data.experiments.length
     ? data.experiments
@@ -94,6 +84,7 @@ export default function RunPage({ data }: { data: RunPageData }) {
           error: null,
           params: null,
           result: null,
+          logs: [],
           passCriteria: null,
           startedAt: null,
           finishedAt: null,
@@ -105,15 +96,9 @@ export default function RunPage({ data }: { data: RunPageData }) {
   }, [data.id]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setElapsed((value) => value + 1);
-      setLogs((current) => {
-        const line = `[t+${elapsed + 3}.0s] ${logPool[(elapsed / 2) % logPool.length | 0]}`;
-        return [...current, line].slice(-6);
-      });
-    }, 1000);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [elapsed]);
+  }, []);
 
   const filteredExperiments = useMemo(
     () => experiments.filter((experiment) => filter === "all" || visibleStatus(experiment.status) === filter),
@@ -123,6 +108,19 @@ export default function RunPage({ data }: { data: RunPageData }) {
   const completed = data.experiments.filter((experiment) => ["passed", "failed", "error"].includes(experiment.status)).length;
   const failed = data.experiments.some((experiment) => ["failed", "error"].includes(experiment.status));
   const running = data.experiments.some((experiment) => experiment.status === "running");
+  const shouldRefresh = running || data.status === "active" || data.recommendation === "forming";
+  const runStartedAt = data.experiments
+    .map((experiment) => experiment.startedAt ? new Date(experiment.startedAt).getTime() : null)
+    .filter((time): time is number => typeof time === "number" && !Number.isNaN(time))
+    .sort((a, b) => a - b)[0] ?? null;
+  const elapsed = runStartedAt ? Math.max(0, (now - runStartedAt) / 1000) : 0;
+
+  useEffect(() => {
+    if (!shouldRefresh) return;
+    const refresh = window.setInterval(() => router.refresh(), 3000);
+    return () => window.clearInterval(refresh);
+  }, [router, shouldRefresh]);
+
   const headlineStatus = failed ? "Request changes" : running ? "Forming" : data.recommendation === "approve" ? "Approve" : "Forming";
   const tabs = [
     { key: "all" as const, label: "All", count: experiments.length },
@@ -223,7 +221,6 @@ export default function RunPage({ data }: { data: RunPageData }) {
                   key={experiment.id}
                   experiment={experiment}
                   open={expanded[experiment.id] ?? false}
-                  logs={logs}
                   onToggle={() => setExpanded((current) => ({ ...current, [experiment.id]: !current[experiment.id] }))}
                 />
               ))}
@@ -272,17 +269,16 @@ export default function RunPage({ data }: { data: RunPageData }) {
 function ExperimentCard({
   experiment,
   open,
-  logs,
   onToggle,
 }: {
   experiment: RunExperiment;
   open: boolean;
-  logs: string[];
   onToggle: () => void;
 }) {
   const tone = statusTone(experiment.status);
   const params = experiment.params ? Object.entries(experiment.params).slice(0, 4) : [];
   const passCriteria = experiment.passCriteria ? Object.entries(experiment.passCriteria) : [];
+  const logs = experiment.logs.slice(-100);
 
   return (
     <div className="run-exp-card" style={{ borderColor: tone.border }}>
@@ -316,10 +312,10 @@ function ExperimentCard({
               </div>
             )}
           </div>
-          {experiment.status === "running" ? (
+          {logs.length ? (
             <div className="run-log-box">
-              {logs.map((line) => <div key={line}>{line}</div>)}
-              <div className="run-cursor">▮</div>
+              {logs.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}
+              {experiment.status === "running" ? <div className="run-cursor">▮</div> : null}
             </div>
           ) : null}
         </div>

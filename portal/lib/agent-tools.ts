@@ -4,6 +4,7 @@ import { postReviewComment, getInstallationOctokit } from "./github";
 import {
   insertExperiment,
   completeExperiment,
+  updateExperimentLogs,
   updatePullRequestStatus,
 } from "./db";
 
@@ -23,6 +24,21 @@ export type ExperimentSource = {
   token?: string;
 };
 
+function resultLogs(result: Record<string, unknown>) {
+  const candidates = [result.logs, result.log_lines, result.output];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate
+        .filter((line): line is string => typeof line === "string")
+        .slice(-100);
+    }
+    if (typeof candidate === "string") {
+      return candidate.split("\n").filter(Boolean).slice(-100);
+    }
+  }
+  return [];
+}
+
 export function makeTools({
   octokit,
   owner,
@@ -38,10 +54,12 @@ export function makeTools({
   source: ExperimentSource;
   prDbId: string;
 }) {
+  let experimentHasRun = false;
+
   return {
     run_experiment: tool({
       description:
-        "Run a drone simulation experiment on the sim server. The scenario must be exactly one of: waypoint_mission, crosswind, tight_turns, low_battery_rtl. Returns the full ExperimentResult JSON with metrics and outcomes.",
+        "Run the single allowed drone simulation experiment for this PR on the sim server. The scenario must be exactly one of: waypoint_mission, crosswind, tight_turns, low_battery_rtl. Returns the full ExperimentResult JSON with metrics and outcomes.",
       inputSchema: z.object({
         scenario: z
           .enum(VALID_SCENARIOS)
@@ -65,36 +83,96 @@ export function makeTools({
           .describe("Simulation speed multiplier"),
       }),
       execute: async ({ scenario, params, replications, speed_factor }) => {
+        if (experimentHasRun) {
+          return {
+            status: "error",
+            error: "Only one experiment may be run per PR review.",
+          };
+        }
+        experimentHasRun = true;
+
         const expId = await insertExperiment({
           pullRequestId: prDbId,
           scenario,
           params: { ...params, replications, speed_factor },
         });
+        const startedAt = Date.now();
+        const logs: string[] = [];
+        const appendLog = async (message: string) => {
+          const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+          logs.push(`[t+${elapsed}s] ${message}`);
+          await updateExperimentLogs(expId, logs.slice(-100));
+        };
+
+        await appendLog(`created experiment row for ${scenario}`);
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (process.env.SIM_SERVER_AUTH_TOKEN) {
           headers.Authorization = `Bearer ${process.env.SIM_SERVER_AUTH_TOKEN}`;
         }
-        const res = await fetch(`${SIM_SERVER_URL}/run`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            scenario,
-            params,
-            replications,
-            speed_factor,
-            source,
-          }),
-        });
+        await appendLog(`posting ${scenario} run to ${SIM_SERVER_URL}/run`);
+        let heartbeat: ReturnType<typeof setInterval> | null = setInterval(() => {
+          void appendLog("waiting for sim server response");
+        }, 15_000);
+        let res: Response;
+        try {
+          res = await fetch(`${SIM_SERVER_URL}/run`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              scenario,
+              params,
+              replications,
+              speed_factor,
+              source,
+            }),
+          });
+        } catch (error) {
+          if (heartbeat) {
+            clearInterval(heartbeat);
+            heartbeat = null;
+          }
+          await appendLog("sim server request failed");
+          const errorResult = {
+            status: "error",
+            error: error instanceof Error ? error.message : "Unknown sim server request failure",
+            logs,
+          };
+          await completeExperiment(expId, errorResult);
+          return errorResult;
+        }
+        if (heartbeat) {
+          clearInterval(heartbeat);
+          heartbeat = null;
+        }
+        await appendLog(`sim server returned HTTP ${res.status}`);
         if (!res.ok) {
           const text = await res.text();
-          const errorResult = { status: "error", error: `Sim server returned ${res.status}: ${text}` };
+          await appendLog("captured sim server error response");
+          const errorResult = {
+            status: "error",
+            error: `Sim server returned ${res.status}: ${text}`,
+            logs,
+          };
           await completeExperiment(expId, errorResult);
           return errorResult;
         }
         const result = await res.json();
-        await completeExperiment(expId, result);
-        return result;
+        const simLogs = resultLogs(result);
+        if (simLogs.length) {
+          logs.push(...simLogs);
+          await updateExperimentLogs(expId, logs.slice(-100));
+        } else {
+          await appendLog("parsed experiment result JSON");
+        }
+        const resultWithLogs = {
+          ...result,
+          logs: logs.slice(-100),
+        };
+        await appendLog(`completed experiment with status ${String(result.status ?? "unknown")}`);
+        resultWithLogs.logs = logs.slice(-100);
+        await completeExperiment(expId, resultWithLogs);
+        return resultWithLogs;
       },
     }),
 

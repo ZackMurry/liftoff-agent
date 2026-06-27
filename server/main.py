@@ -82,6 +82,7 @@ def run_experiment(
         return run_user_experiment(req)
     except (UserExperimentError, SimLaunchError, ValueError) as exc:
         logger.error("Experiment failed: %s", traceback.format_exc())
+        logs = getattr(exc, "logs", [])
         return ExperimentResult(
             scenario=req.scenario,
             params=req.params,
@@ -90,6 +91,7 @@ def run_experiment(
             pass_criteria={},
             verdict=f"Experiment error: {exc}",
             error=str(exc),
+            logs=logs,
         )
 
 

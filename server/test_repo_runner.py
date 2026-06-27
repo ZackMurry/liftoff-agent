@@ -106,11 +106,12 @@ def test_run_user_experiment_clones_launches_sim_and_runs_user_command(
                         "runs": [],
                         "pass_criteria": {"user_checks": True},
                         "verdict": "ok",
+                        "logs": ["payload log line"],
                     }
                 ),
                 encoding="utf-8",
             )
-            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+            return types.SimpleNamespace(returncode=0, stdout="user stdout line\n", stderr="user stderr line\n")
         raise AssertionError(f"unexpected command: {cmd}")
 
     starts: list[PX4SimLauncher] = []
@@ -124,6 +125,9 @@ def test_run_user_experiment_clones_launches_sim_and_runs_user_command(
 
     assert result.status == "passed"
     assert result.pass_criteria == {"user_checks": True}
+    assert "[user stdout] user stdout line" in result.logs
+    assert "[user stderr] user stderr line" in result.logs
+    assert "payload log line" in result.logs
     assert starts and stops == starts
 
     clone_cmd = calls[0][0]
@@ -141,6 +145,22 @@ def test_run_user_experiment_clones_launches_sim_and_runs_user_command(
     assert env["LIFTOFF_SPEED_FACTOR"] == "3.0"
     assert json.loads(env["LIFTOFF_MAVSDK_ADDRESSES_JSON"]) == ["udpin://0.0.0.0:14540"]
     assert env["LIFTOFF_HEAD_SHA"] == "abc123"
+
+
+def test_run_endpoint_returns_captured_logs_on_user_experiment_error(monkeypatch):
+    def fake_run(_req):
+        raise UserExperimentError(
+            "boom",
+            logs=["[server] starting user experiment command", "[user stderr] traceback"],
+        )
+
+    monkeypatch.setattr("server.main.run_user_experiment", fake_run)
+
+    result = run_experiment(_request())
+
+    assert result.status == "error"
+    assert result.error == "boom"
+    assert result.logs == ["[server] starting user experiment command", "[user stderr] traceback"]
 
 
 def test_resolve_test_command_prefers_standard_user_repo_entrypoint(tmp_path, monkeypatch):

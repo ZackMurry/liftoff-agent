@@ -95,6 +95,10 @@ class ExperimentResult(BaseModel):
     )
     verdict: str = Field(description="One-line human-readable summary.")
     error: Optional[str] = Field(default=None, description="Error message if status is 'error'.")
+    logs: list[str] = Field(
+        default_factory=list,
+        description="Server, user-command, and simulator log lines captured during the run.",
+    )
 
 
 # ---------------------------------------------------------------------------

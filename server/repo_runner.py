@@ -27,6 +27,10 @@ DEFAULT_SIM_STARTUP_DELAY_S = 8
 class UserExperimentError(RuntimeError):
     """Raised when clone, sim launch, command execution, or parsing fails."""
 
+    def __init__(self, message: str, logs: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.logs = logs or []
+
 
 def run_user_experiment(req: ExperimentRequest) -> ExperimentResult:
     """Run one Liftoff experiment using code from the requested PR branch."""
@@ -42,6 +46,9 @@ def run_user_experiment(req: ExperimentRequest) -> ExperimentResult:
         sim_log_dir.mkdir()
 
         _clone_source(req.source, checkout_dir, root)
+        logs = [
+            f"[server] cloned {req.source.full_name}@{req.source.head_sha}",
+        ]
 
         launcher = PX4SimLauncher(
             build_launch_config(req.params, req.speed_factor),
@@ -49,8 +56,10 @@ def run_user_experiment(req: ExperimentRequest) -> ExperimentResult:
         )
         try:
             launcher.start()
+            logs.append("[server] launched PX4/Gazebo container")
             _wait_for_sim_startup(launcher)
-            payload = _run_user_command(
+            logs.append("[server] PX4/Gazebo startup wait complete")
+            payload, command_logs = _run_user_command(
                 req=req,
                 source=req.source,
                 checkout_dir=checkout_dir,
@@ -58,7 +67,16 @@ def run_user_experiment(req: ExperimentRequest) -> ExperimentResult:
                 sim_log_dir=sim_log_dir,
                 mavsdk_addresses=launcher.mavsdk_addresses,
             )
-            return _normalize_result(req, payload)
+            logs.extend(command_logs)
+            docker_logs = launcher.logs_tail()
+            if docker_logs:
+                logs.extend(_prefixed_lines("px4", docker_logs))
+            return _normalize_result(req, payload, logs)
+        except UserExperimentError as exc:
+            docker_logs = launcher.logs_tail()
+            if docker_logs:
+                exc.logs.extend(_prefixed_lines("px4", docker_logs))
+            raise
         finally:
             launcher.stop()
 
@@ -104,10 +122,13 @@ def _wait_for_sim_startup(launcher: PX4SimLauncher) -> None:
         running = launcher.is_running()
         if running is False:
             logs = launcher.logs_tail()
-            raise SimLaunchError(
+            error = SimLaunchError(
                 "PX4/Gazebo container exited during startup."
                 + (f"\nDocker logs tail:\n{logs}" if logs else "")
             )
+            if logs:
+                setattr(error, "logs", _prefixed_lines("px4", logs))
+            raise error
         time.sleep(min(1.0, max(0.0, deadline - time.monotonic())))
 
 
@@ -119,8 +140,9 @@ def _run_user_command(
     output_dir: Path,
     sim_log_dir: Path,
     mavsdk_addresses: list[str],
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], list[str]]:
     command = _resolve_test_command(checkout_dir)
+    logs = [f"[server] resolved experiment command: {command}"]
     timeout = int(os.environ.get("LIFTOFF_TEST_TIMEOUT_S", DEFAULT_COMMAND_TIMEOUT_S))
     env = os.environ.copy()
     env.update(
@@ -138,6 +160,7 @@ def _run_user_command(
     )
 
     try:
+        logs.append("[server] starting user experiment command")
         result = subprocess.run(
             command,
             cwd=checkout_dir,
@@ -148,29 +171,46 @@ def _run_user_command(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise UserExperimentError(f"User experiment timed out after {timeout}s.") from exc
+        logs.extend(_prefixed_lines("user stdout", _decode_process_output(exc.stdout)))
+        logs.extend(_prefixed_lines("user stderr", _decode_process_output(exc.stderr)))
+        raise UserExperimentError(f"User experiment timed out after {timeout}s.", logs) from exc
+
+    logs.append(f"[server] user experiment command exited {result.returncode}")
+    logs.extend(_prefixed_lines("user stdout", result.stdout))
+    logs.extend(_prefixed_lines("user stderr", result.stderr))
 
     if result.returncode != 0:
         details = result.stderr.strip() or result.stdout.strip()
         raise UserExperimentError(
             f"User experiment command failed (exit {result.returncode})."
-            + (f" Output: {details[-4000:]}" if details else "")
+            + (f" Output: {details[-4000:]}" if details else ""),
+            logs,
         )
 
     result_path = output_dir / "result.json"
-    raw = result_path.read_text(encoding="utf-8") if result_path.exists() else result.stdout
+    if result_path.exists():
+        raw = result_path.read_text(encoding="utf-8")
+        logs.append(f"[server] parsing experiment result from {result_path.name}")
+    else:
+        raw = result.stdout
+        logs.append("[server] parsing experiment result from stdout")
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise UserExperimentError(
-            "User experiment did not produce valid JSON on stdout or result.json."
+            "User experiment did not produce valid JSON on stdout or result.json.",
+            logs,
         ) from exc
     if not isinstance(payload, dict):
-        raise UserExperimentError("User experiment JSON result must be an object.")
-    return payload
+        raise UserExperimentError("User experiment JSON result must be an object.", logs)
+    return payload, logs
 
 
-def _normalize_result(req: ExperimentRequest, payload: dict[str, Any]) -> ExperimentResult:
+def _normalize_result(
+    req: ExperimentRequest,
+    payload: dict[str, Any],
+    logs: list[str] | None = None,
+) -> ExperimentResult:
     status = str(payload.get("status", "error"))
     if status not in {"passed", "failed", "error"}:
         status = "error"
@@ -186,6 +226,8 @@ def _normalize_result(req: ExperimentRequest, payload: dict[str, Any]) -> Experi
     if not isinstance(pass_criteria, dict):
         pass_criteria = {}
 
+    captured_logs = [*(logs or []), *_payload_logs(payload)]
+
     return ExperimentResult(
         scenario=str(payload.get("scenario", req.scenario)),
         params=dict(payload.get("params", req.params) or {}),
@@ -194,7 +236,31 @@ def _normalize_result(req: ExperimentRequest, payload: dict[str, Any]) -> Experi
         pass_criteria={str(k): bool(v) for k, v in pass_criteria.items()},
         verdict=str(payload.get("verdict", "User experiment completed.")),
         error=payload.get("error"),
+        logs=captured_logs[-300:],
     )
+
+
+def _payload_logs(payload: dict[str, Any]) -> list[str]:
+    raw_logs = payload.get("logs", payload.get("log_lines", payload.get("output")))
+    if isinstance(raw_logs, list):
+        return [str(line) for line in raw_logs]
+    if isinstance(raw_logs, str):
+        return raw_logs.splitlines()
+    return []
+
+
+def _prefixed_lines(label: str, text: str | None) -> list[str]:
+    if not text:
+        return []
+    return [f"[{label}] {line}" for line in text.splitlines() if line][-120:]
+
+
+def _decode_process_output(output: str | bytes | None) -> str:
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        return output.decode(errors="replace")
+    return output
 
 
 def _resolve_test_command(checkout_dir: Path) -> str:

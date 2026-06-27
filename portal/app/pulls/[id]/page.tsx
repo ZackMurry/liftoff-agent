@@ -5,6 +5,17 @@ import RunPage, { RunPageData } from "./run-page";
 export const revalidate = 5;
 export const dynamic = "force-dynamic";
 
+function toLogLines(result: Record<string, unknown> | null) {
+  const rawLogs = result?.logs ?? result?.log_lines ?? result?.output;
+  if (Array.isArray(rawLogs)) {
+    return rawLogs.filter((line): line is string => typeof line === "string");
+  }
+  if (typeof rawLogs === "string") {
+    return rawLogs.split("\n").filter(Boolean);
+  }
+  return [];
+}
+
 function toRunPageData(row: Record<string, unknown>): RunPageData {
   const experiments = ((row.experiments as Array<Record<string, unknown>>) ?? [])
     .slice()
@@ -27,18 +38,22 @@ function toRunPageData(row: Record<string, unknown>): RunPageData {
     reviewBody: row.review_body ? String(row.review_body) : null,
     diffLength: typeof row.diff_length === "number" ? row.diff_length : null,
     updatedAt: String(row.updated_at),
-    experiments: experiments.map((experiment) => ({
-      id: String(experiment.id),
-      scenario: String(experiment.scenario),
-      status: String(experiment.status ?? "queued"),
-      verdict: experiment.verdict ? String(experiment.verdict) : null,
-      error: experiment.error ? String(experiment.error) : null,
-      params: (experiment.params as Record<string, unknown> | null) ?? null,
-      result: (experiment.result as Record<string, unknown> | null) ?? null,
-      passCriteria: (experiment.pass_criteria as Record<string, unknown> | null) ?? null,
-      startedAt: experiment.started_at ? String(experiment.started_at) : null,
-      finishedAt: experiment.finished_at ? String(experiment.finished_at) : null,
-    })),
+    experiments: experiments.map((experiment) => {
+      const result = (experiment.result as Record<string, unknown> | null) ?? null;
+      return {
+        id: String(experiment.id),
+        scenario: String(experiment.scenario),
+        status: String(experiment.status ?? "queued"),
+        verdict: experiment.verdict ? String(experiment.verdict) : null,
+        error: experiment.error ? String(experiment.error) : null,
+        params: (experiment.params as Record<string, unknown> | null) ?? null,
+        result,
+        logs: toLogLines(result),
+        passCriteria: (experiment.pass_criteria as Record<string, unknown> | null) ?? null,
+        startedAt: experiment.started_at ? String(experiment.started_at) : null,
+        finishedAt: experiment.finished_at ? String(experiment.finished_at) : null,
+      };
+    }),
   };
 }
 

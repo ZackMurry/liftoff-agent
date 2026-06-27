@@ -1005,14 +1005,15 @@ a {
 }
 
 .run-log-box {
-  max-height: 128px;
-  overflow: hidden;
+  max-height: 134px;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 8px;
   background: #08090b;
   color: #8a9099;
   font-size: 11px;
-  line-height: 1.85;
+  line-height: 20px;
   padding: 11px 13px;
 }
 

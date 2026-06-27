@@ -110,6 +110,19 @@ export async function completeExperiment(
   if (error) throw error;
 }
 
+export async function updateExperimentLogs(
+  experimentId: string,
+  logs: string[],
+) {
+  const { error } = await supabase
+    .from("experiments")
+    .update({
+      result: { logs },
+    })
+    .eq("id", experimentId);
+  if (error) throw error;
+}
+
 // --- Dashboard Queries ---
 
 export async function getDashboardPRs() {
